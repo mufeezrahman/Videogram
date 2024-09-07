@@ -17,7 +17,6 @@ const registerUser = asyncHandler( async(req,res) =>{
 
     //Step 1 If data is coming from a URL or form
     const {username, email, fullName, password} = req.body;
-    console.log("Email:",email);
 
     //Step 2
     if(
@@ -27,7 +26,7 @@ const registerUser = asyncHandler( async(req,res) =>{
     }
 
     //Step 3
-    const existedUser = User.findOne({
+    const existedUser = await User.findOne({
         $or:[{username},{email}]
     })
 
@@ -35,18 +34,18 @@ const registerUser = asyncHandler( async(req,res) =>{
         throw new ApiError(409,"User with same email or username already exists!");
     }
 
+
+    console.log(req.files)
     //Step 4
     const avatarLocalPath = req.files?.avatar[0]?.path;
-    console.log(avatarLocalPath);
 
     const coverImageLocalPath = req.files?.coverImage[0]?.path;
-    console.log(coverImageLocalPath);
 
     if(!avatarLocalPath){
         throw new ApiError(400,"Avatar File is required!");
     }
 
-    //Step 5
+    // //Step 5
     const avatar = await uploadOnCloudinary(avatarLocalPath);
     const coverImage = await uploadOnCloudinary(coverImageLocalPath);
 
@@ -59,6 +58,8 @@ const registerUser = asyncHandler( async(req,res) =>{
         fullName,
         avatar:avatar.url,
         coverImage:coverImage?.url||"",
+        email,
+        password,
         username:username.toLowerCase()
     })
     //Removing the password and refreshToken
