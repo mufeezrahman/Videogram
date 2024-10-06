@@ -239,4 +239,154 @@ const refreshAccessToken = asyncHandler(async (req,res)=>{
     }
 })
 
-export {registerUser,loginUser,logoutUser,refreshAccessToken}
+const changePassword = asyncHandler(async(req,res)=>{
+    const {oldPassword,newPassword}=req.body;
+
+    const user = await User.findById(req.user?._id)
+
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+    
+    if(!isPasswordCorrect){
+        throw new ApiError(400,"Invalid old password");
+    }
+
+    user.password=newPassword;
+    user.save({validateBeforeSave:false});
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200,{},"Password changed successfully.")
+    )
+})
+
+const getCurrentUser = asyncHandler(async(req,res)=>{
+    return res
+    .status(200)
+    .json(200,req.user,"Current user fetched successfully");
+})
+
+const updateAccountDetails = asyncHandler(async(req,res)=>{
+    const {fullName,email} = req.body;
+
+    if(!fullName || !email){
+        return new ApiError(400,"All fields are required!")
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set:{
+                fullName:fullName,
+                email:email
+            }
+        },
+        {
+            new:true
+        }
+    ).select("-password")
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200,"Account details updated successfully."))
+})
+
+function extractPublicIdFromUrl(url) {
+    const urlParts = url.split('/');
+    const fileNameWithExtension = urlParts[urlParts.length - 1]; // Extract the last part of the URL
+    const publicId = fileNameWithExtension.split('.')[0]; // Remove the file extension
+    return publicId;
+}
+
+const deleteFromCloudinary = async (publicId) => {
+    try {
+        if (!publicId) return null;
+
+        // Deleting the file from Cloudinary
+        const result = await cloudinary.uploader.destroy(publicId);
+        return result;
+    } catch (error) {
+        console.error('Error while deleting file from Cloudinary:', error);
+        throw new Error('File deletion failed');
+    }
+};
+
+
+const updateUserAvatar = asyncHandler(async(req,res)=>{
+    const avatarLocalPath = req.user?.path;
+
+    if(!avatarLocalPath){
+        throw new ApiError(400,"Cannot find avatar file.")
+    }
+
+    const currentUser = await User.findById(req.user?._id);
+
+    const currentAvatarUrl = currentUser.avatar;
+
+    if(currentAvatarUrl){
+
+        const publicId = extractPublicIdFromUrl(currentAvatarUrl)
+
+        await deleteFromCloudinary(publicId)
+    }
+
+    const avatar = await uploadOnCloudinary(avatarLocalPath)
+
+    if(!avatar.url){
+        throw new ApiError(400,"Could not upload the avatar file.")
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set:{
+                avatar:avatar.url
+            }
+        },
+        {new:true}
+    ).select("-password")
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200,updatedUser,"Avatar changed successfully."))
+})
+
+const updateCoverImage = asyncHandler(async(req,res)=>{
+    const coverImgLocalPath = req.user?.path;
+
+    if(!coverImgLocalPath){
+        throw new ApiError(400,"Cannot find cover image file.")
+    }
+
+    const coverImg = await uploadOnCloudinary(coverImgLocalPath)
+
+    if(!coverImg.url){
+        throw new ApiError(400,"Could not upload the cover image file.")
+    }
+
+    const currentUser = await User.findById(req.user?._id);
+
+    const currentCoverImgUrl = currentUser.coverImage;
+
+    if(currentCoverImgUrl){
+
+        const publicId = extractPublicIdFromUrl(currentCoverImgUrl)
+
+        await deleteFromCloudinary(publicId)
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set:{
+                coverImage:coverImg.url
+            }
+        },
+        {new:true}
+    ).select("-password")
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200,updatedUser,"Cover Image changed successfully.")) 
+})
+export {registerUser,loginUser,logoutUser,refreshAccessToken,changePassword,getCurrentUser,updateAccountDetails,updateCoverImage,updateUserAvatar}
